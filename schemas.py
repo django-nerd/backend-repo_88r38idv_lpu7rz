@@ -11,38 +11,54 @@ Model name is converted to lowercase for the collection name:
 - BlogPost -> "blogs" collection
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List
 
-# Example schemas (replace with your own):
+# Domain Schemas for the Boss Encyclopedia
 
+class Game(BaseModel):
+    """
+    Games collection schema
+    Collection name: "game"
+    """
+    title: str = Field(..., description="Game title, e.g., 'Elden Ring'")
+    platform: Optional[str] = Field(None, description="Platform or system, e.g., 'PC/PS5/Xbox'")
+    cover_image: Optional[HttpUrl] = Field(None, description="URL to a cover image")
+    description: Optional[str] = Field(None, description="Short description of the game")
+
+class Boss(BaseModel):
+    """
+    Bosses collection schema
+    Collection name: "boss"
+    """
+    game_id: str = Field(..., description="Reference to the game document _id as string")
+    name: str = Field(..., description="Boss name")
+    image: Optional[HttpUrl] = Field(None, description="Primary image URL of the boss")
+    summary: Optional[str] = Field(None, description="Short lore/overview")
+    difficulty: Optional[str] = Field(None, description="Relative difficulty label")
+
+class Strategy(BaseModel):
+    """
+    Strategies collection schema
+    Collection name: "strategy"
+    """
+    boss_id: str = Field(..., description="Reference to the boss document _id as string")
+    title: str = Field(..., description="Strategy title, e.g., 'Melee build cheese' ")
+    steps: List[str] = Field(default_factory=list, description="Ordered bullet points with steps")
+    recommended_level: Optional[str] = Field(None, description="Recommended level/gear")
+    video_url: Optional[HttpUrl] = Field(None, description="YouTube or other video URL")
+
+# Example schemas kept for reference (not used by the app but safe to keep if needed)
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    name: str
+    email: str
+    address: str
+    age: Optional[int] = None
+    is_active: bool = True
 
 class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
-
-# Add your own schemas here:
-# --------------------------------------------------
-
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+    title: str
+    description: Optional[str] = None
+    price: float
+    category: str
+    in_stock: bool = True
