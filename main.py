@@ -7,16 +7,16 @@ from bson import ObjectId
 
 from database import db, create_document, get_documents
 
-app = FastAPI(title="Boss Encyclopedia API", version="1.3.0")
+app = FastAPI(title="Boss Encyclopedia API", version="1.3.1")
 
-# CORS: allow the frontend URL if provided; if wildcard, don't allow credentials to satisfy browser rules
-frontend_origin = os.getenv("FRONTEND_URL", "*")
-allow_all = frontend_origin == "*"
+# CORS: fully permissive for preview/dev to avoid opaque CORS failures
+# No credentials allowed when using wildcard origins to satisfy browser rules
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin] if not allow_all else ["*"],
-    allow_credentials=not allow_all,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_origins=["*"],
+    allow_origin_regex=".*",
+    allow_credentials=False,
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
@@ -144,10 +144,15 @@ class QueueItem(BaseModel):
 class QueueUpdate(BaseModel):
     status: str = Field(..., pattern="^(pending|approved|rejected)$")
 
+# Health endpoint kept super fast for frontend base discovery
+@app.get("/api/health")
+def api_health():
+    return {"ok": True, "version": app.version}
+
 # Routes
 @app.get("/")
 def read_root():
-    return {"message": "Boss Encyclopedia API is running"}
+    return {"message": "Boss Encyclopedia API is running", "version": app.version}
 
 @app.get("/test")
 def test_database():
@@ -186,7 +191,7 @@ def test_database():
 @app.post("/api/games", response_model=GameOut)
 def create_game(game: GameCreate):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     doc_id = create_document("game", game.model_dump())
     created = db["game"].find_one({"_id": ObjectId(doc_id)})
     return serialize_doc(created)
@@ -194,7 +199,8 @@ def create_game(game: GameCreate):
 @app.get("/api/games", response_model=List[GameOut])
 def list_games():
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        # graceful fallback in preview when DB not set
+        return []
     items = get_documents("game", {})
     return [serialize_doc(d) for d in items]
 
@@ -202,7 +208,7 @@ def list_games():
 @app.post("/api/bosses", response_model=BossOut)
 def create_boss(boss: BossCreate):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     # validate game exists
     try:
         gid = ObjectId(boss.game_id)
@@ -222,7 +228,7 @@ def list_bosses(
     limit: int = Query(50, ge=1, le=100),
 ):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        return []
     filter_dict = {}
     if game_id:
         try:
@@ -238,7 +244,7 @@ def list_bosses(
 @app.get("/api/bosses/{boss_id}")
 def get_boss_detail(boss_id: str = Path(..., min_length=8, max_length=64)):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     try:
         _id = ObjectId(boss_id)
     except Exception:
@@ -255,7 +261,7 @@ def get_boss_detail(boss_id: str = Path(..., min_length=8, max_length=64)):
 @app.post("/api/strategies", response_model=StrategyOut)
 def create_strategy(strategy: StrategyCreate):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     # validate boss exists
     try:
         bid = ObjectId(strategy.boss_id)
@@ -275,7 +281,7 @@ def create_strategy(strategy: StrategyCreate):
 @app.get("/api/strategies", response_model=List[StrategyOut])
 def list_strategies(boss_id: str):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        return []
     try:
         _ = ObjectId(boss_id)
     except Exception:
@@ -287,7 +293,7 @@ def list_strategies(boss_id: str):
 @app.post("/api/ingest/demo")
 def ingest_demo():
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
 
     # If already populated, skip
     if db["game"].count_documents({"title": "Elden Ring"}, limit=1) > 0:
@@ -361,7 +367,7 @@ def ingest_demo():
 @app.post("/api/ingest/youtube")
 def ingest_youtube(data: YouTubeIngest):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
 
     # ensure game
     game = db["game"].find_one({"title": data.game_title})
@@ -402,7 +408,7 @@ def ingest_youtube(data: YouTubeIngest):
 @app.post("/api/ingest/bulk")
 def ingest_bulk(payload: BulkIngest):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
 
     # ensure game
     game = db["game"].find_one({"title": payload.game_title})
@@ -461,7 +467,7 @@ def ingest_bulk(payload: BulkIngest):
 @app.post("/api/mod/submit", summary="Submit external item to moderation queue")
 def mod_submit(item: QueueItem):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     # dedupe in queue by source+video or source+boss_name
     q = {"source": item.source, "game_title": item.game_title, "boss_name": item.boss_name}
     if item.video_url:
@@ -476,14 +482,14 @@ def mod_submit(item: QueueItem):
 @app.get("/api/mod/queue", summary="List moderation queue items")
 def mod_queue(status: str = Query("pending")):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        return []
     items = get_documents("ingest_queue", {"status": status})
     return [serialize_doc(x) for x in items]
 
 @app.post("/api/mod/approve/{item_id}", summary="Approve queue item and ingest")
 def mod_approve(item_id: str):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     try:
         oid = ObjectId(item_id)
     except Exception:
@@ -522,7 +528,7 @@ def mod_approve(item_id: str):
 @app.post("/api/mod/reject/{item_id}", summary="Reject queue item")
 def mod_reject(item_id: str):
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     try:
         oid = ObjectId(item_id)
     except Exception:
@@ -537,7 +543,7 @@ def mod_reject(item_id: str):
 @app.post("/api/ingest/scheduled-run", summary="Simulate scheduled crawl and add items to moderation queue")
 def scheduled_ingest():
     if db is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+        raise HTTPException(status_code=503, detail="Database not configured")
     samples = [
         QueueItem(source="youtube", game_title="Elden Ring", boss_name="Radahn, Starscourge", strategy_title="Bleed Build", steps=["Use Rivers of Blood", "Stay on horseback"], video_url="https://www.youtube.com/embed/sample123", image=None, summary="Festival of Radahn fight", difficulty="Hard").model_dump(),
         QueueItem(source="wiki", game_title="Sekiro", boss_name="Genichiro Ashina", strategy_title="Mikiri + Deflect", steps=["Bait thrust for Mikiri", "Deflect bow combos"], video_url=None, image=None, summary="Castle rooftop duel", difficulty="Hard").model_dump(),
