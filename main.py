@@ -1,13 +1,13 @@
 import os
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 from typing import List, Optional
 from bson import ObjectId
 
 from database import db, create_document, get_documents
 
-app = FastAPI(title="Boss Encyclopedia API", version="1.0.0")
+app = FastAPI(title="Boss Encyclopedia API", version="1.1.0")
 
 # CORS: allow the frontend URL if provided, otherwise allow all (dev)
 frontend_origin = os.getenv("FRONTEND_URL", "*")
@@ -18,6 +18,28 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Security headers middleware (basic hardening)
+CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "img-src 'self' data: https:; "
+    "style-src 'self' 'unsafe-inline' https:; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+    "font-src 'self' https: data:; "
+    "frame-src 'self' https://www.youtube.com https://youtube.com https://player.vimeo.com; "
+    "connect-src 'self' *;"
+)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    response.headers.setdefault("Content-Security-Policy", CSP)
+    return response
 
 # Helpers
 class ObjectIdStr(str):
@@ -52,7 +74,7 @@ def serialize_doc(doc: dict) -> dict:
 class GameCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
     platform: Optional[str] = Field(None, max_length=120)
-    cover_image: Optional[str] = Field(None)
+    cover_image: Optional[HttpUrl | str] = Field(None)
     description: Optional[str] = Field(None, max_length=2000)
 
 class GameOut(GameCreate):
@@ -61,7 +83,7 @@ class GameOut(GameCreate):
 class BossCreate(BaseModel):
     game_id: str = Field(..., description="Game document id as string")
     name: str = Field(..., min_length=1, max_length=160)
-    image: Optional[str] = None
+    image: Optional[HttpUrl | str] = None
     summary: Optional[str] = Field(None, max_length=2000)
     difficulty: Optional[str] = Field(None, max_length=50)
 
@@ -73,7 +95,7 @@ class StrategyCreate(BaseModel):
     title: str
     steps: List[str] = []
     recommended_level: Optional[str] = None
-    video_url: Optional[str] = None
+    video_url: Optional[HttpUrl | str] = None
 
 class StrategyOut(StrategyCreate):
     id: ObjectIdStr
@@ -149,7 +171,12 @@ def create_boss(boss: BossCreate):
     return serialize_doc(created)
 
 @app.get("/api/bosses", response_model=List[BossOut])
-def list_bosses(game_id: Optional[str] = None, q: Optional[str] = Query(None, min_length=1, max_length=120)):
+def list_bosses(
+    game_id: Optional[str] = None,
+    q: Optional[str] = Query(None, min_length=1, max_length=120),
+    skip: int = Query(0, ge=0, le=10000),
+    limit: int = Query(50, ge=1, le=100),
+):
     if db is None:
         raise HTTPException(status_code=500, detail="Database not configured")
     filter_dict = {}
@@ -160,7 +187,8 @@ def list_bosses(game_id: Optional[str] = None, q: Optional[str] = Query(None, mi
             raise HTTPException(status_code=400, detail="Invalid game_id")
     if q:
         filter_dict["name"] = {"$regex": q, "$options": "i"}
-    items = get_documents("boss", filter_dict)
+    cursor = db["boss"].find(filter_dict).skip(skip).limit(limit)
+    items = list(cursor)
     return [serialize_doc(d) for d in items]
 
 @app.get("/api/bosses/{boss_id}")

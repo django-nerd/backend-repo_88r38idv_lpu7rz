@@ -1,12 +1,32 @@
 INFO:     Will watch for changes in these directories: ['/home/workspace']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [198] using StatReload
-INFO:     Started server process [200]
+INFO:     Started reloader process [277] using StatReload
+INFO:     Started server process [279]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     172.20.0.1:32908 - "HEAD / HTTP/1.1" 405 Method Not Allowed
-INFO:     172.20.0.1:32896 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:49294 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.20.0.1:49288 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -26,6 +46,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
@@ -87,8 +117,28 @@ Traceback (most recent call last):
     )
     ^
 TypeError: ObjectIdStr.validate() takes 2 positional arguments but 3 were given
-INFO:     172.20.0.1:32924 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:49308 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -108,6 +158,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
@@ -169,8 +229,28 @@ Traceback (most recent call last):
     )
     ^
 TypeError: ObjectIdStr.validate() takes 2 positional arguments but 3 were given
-INFO:     172.20.0.1:32940 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:49324 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -190,6 +270,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
@@ -251,8 +341,28 @@ Traceback (most recent call last):
     )
     ^
 TypeError: ObjectIdStr.validate() takes 2 positional arguments but 3 were given
-INFO:     172.20.0.1:32956 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46510 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -272,6 +382,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
@@ -333,8 +453,28 @@ Traceback (most recent call last):
     )
     ^
 TypeError: ObjectIdStr.validate() takes 2 positional arguments but 3 were given
-INFO:     172.20.0.1:53594 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46518 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -354,6 +494,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
@@ -415,8 +565,28 @@ Traceback (most recent call last):
     )
     ^
 TypeError: ObjectIdStr.validate() takes 2 positional arguments but 3 were given
-INFO:     172.20.0.1:53606 - "GET /api/bosses HTTP/1.1" 500 Internal Server Error
+INFO:     172.20.0.1:46524 - "GET /api/bosses?skip=0&limit=12 HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 98, in receive
+    return self.receive_nowait()
+           ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 78, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/anyio/streams/memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/local/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 408, in run_asgi
     result = await app(  # type: ignore[func-returns-value]
@@ -436,6 +606,16 @@ Traceback (most recent call last):
     raise exc
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/errors.py", line 162, in __call__
     await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 108, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace/main.py", line 36, in add_security_headers
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 84, in call_next
+    raise app_exc
+  File "/usr/local/lib/python3.13/site-packages/starlette/middleware/base.py", line 70, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 91, in __call__
     await self.simple_response(scope, receive, send, request_headers=headers)
   File "/usr/local/lib/python3.13/site-packages/starlette/middleware/cors.py", line 146, in simple_response
