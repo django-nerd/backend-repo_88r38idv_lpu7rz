@@ -7,7 +7,7 @@ from bson import ObjectId
 
 from database import db, create_document, get_documents
 
-app = FastAPI(title="Boss Encyclopedia API", version="1.1.0")
+app = FastAPI(title="Boss Encyclopedia API", version="1.2.0")
 
 # CORS: allow the frontend URL if provided, otherwise allow all (dev)
 frontend_origin = os.getenv("FRONTEND_URL", "*")
@@ -99,6 +99,32 @@ class StrategyCreate(BaseModel):
 
 class StrategyOut(StrategyCreate):
     id: ObjectIdStr
+
+# Ingestion schemas
+class YouTubeIngest(BaseModel):
+    game_title: str = Field(..., min_length=1, max_length=120)
+    boss_name: str = Field(..., min_length=1, max_length=160)
+    video_url: HttpUrl
+    strategy_title: Optional[str] = Field(None, max_length=160)
+    steps: List[str] = []
+    recommended_level: Optional[str] = None
+    image: Optional[HttpUrl | str] = None
+    summary: Optional[str] = None
+    difficulty: Optional[str] = None
+
+class BulkBoss(BaseModel):
+    name: str
+    image: Optional[HttpUrl | str] = None
+    summary: Optional[str] = None
+    difficulty: Optional[str] = None
+    strategies: List[StrategyCreate] = []
+
+class BulkIngest(BaseModel):
+    game_title: str
+    platform: Optional[str] = None
+    cover_image: Optional[HttpUrl | str] = None
+    description: Optional[str] = None
+    bosses: List[BulkBoss] = []
 
 # Routes
 @app.get("/")
@@ -305,6 +331,98 @@ def ingest_demo():
 
     created_game = db["game"].find_one({"_id": ObjectId(game_id)})
     return serialize_doc(created_game)
+
+# Automation: lightweight ingestion helpers
+@app.post("/api/ingest/youtube")
+def ingest_youtube(data: YouTubeIngest):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    # ensure game
+    game = db["game"].find_one({"title": data.game_title})
+    if not game:
+        game_create = GameCreate(title=data.game_title)
+        game_id = create_document("game", game_create.model_dump())
+        game = db["game"].find_one({"_id": ObjectId(game_id)})
+    game_id_str = str(game["_id"]) if isinstance(game["_id"], ObjectId) else game.get("id")
+
+    # ensure boss
+    boss = db["boss"].find_one({"name": data.boss_name, "game_id": game_id_str})
+    if not boss:
+        new_boss = BossCreate(
+            game_id=game_id_str,
+            name=data.boss_name,
+            image=data.image,
+            summary=data.summary,
+            difficulty=data.difficulty,
+        )
+        boss_id = create_document("boss", new_boss.model_dump())
+        boss = db["boss"].find_one({"_id": ObjectId(boss_id)})
+
+    # create strategy
+    strategy = StrategyCreate(
+        boss_id=str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id"),
+        title=data.strategy_title or f"Video Guide: {data.boss_name}",
+        steps=data.steps or [],
+        recommended_level=data.recommended_level,
+        video_url=str(data.video_url),
+    )
+    sid = create_document("strategy", strategy.model_dump())
+    created = db["strategy"].find_one({"_id": ObjectId(sid)})
+    return serialize_doc(created)
+
+@app.post("/api/ingest/bulk")
+def ingest_bulk(payload: BulkIngest):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    # ensure game
+    game = db["game"].find_one({"title": payload.game_title})
+    if not game:
+        game_create = GameCreate(
+            title=payload.game_title,
+            platform=payload.platform,
+            cover_image=payload.cover_image,
+            description=payload.description,
+        )
+        game_id = create_document("game", game_create.model_dump())
+        game = db["game"].find_one({"_id": ObjectId(game_id)})
+    game_id_str = str(game["_id"]) if isinstance(game["_id"], ObjectId) else game.get("id")
+
+    created_bosses: List[dict] = []
+    for b in payload.bosses:
+        boss = db["boss"].find_one({"name": b.name, "game_id": game_id_str})
+        if not boss:
+            boss_create = BossCreate(
+                game_id=game_id_str,
+                name=b.name,
+                image=b.image,
+                summary=b.summary,
+                difficulty=b.difficulty,
+            )
+            bid = create_document("boss", boss_create.model_dump())
+            boss = db["boss"].find_one({"_id": ObjectId(bid)})
+        # strategies
+        for s in b.strategies:
+            try:
+                # validate boss id
+                _ = ObjectId(s.boss_id)
+                sid = create_document("strategy", s.model_dump())
+                _ = db["strategy"].find_one({"_id": ObjectId(sid)})
+            except Exception:
+                # if provided boss_id is invalid or missing, force link to created boss
+                strategy = StrategyCreate(
+                    boss_id=str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id"),
+                    title=s.title,
+                    steps=s.steps,
+                    recommended_level=s.recommended_level,
+                    video_url=s.video_url,
+                )
+                sid = create_document("strategy", strategy.model_dump())
+                _ = db["strategy"].find_one({"_id": ObjectId(sid)})
+        created_bosses.append(serialize_doc(boss))
+
+    return {"game": serialize_doc(game), "bosses": created_bosses}
 
 
 if __name__ == "__main__":
