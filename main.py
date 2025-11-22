@@ -7,16 +7,17 @@ from bson import ObjectId
 
 from database import db, create_document, get_documents
 
-app = FastAPI(title="Boss Encyclopedia API", version="1.2.0")
+app = FastAPI(title="Boss Encyclopedia API", version="1.3.0")
 
-# CORS: allow the frontend URL if provided, otherwise allow all (dev)
+# CORS: allow the frontend URL if provided; if wildcard, don't allow credentials to satisfy browser rules
 frontend_origin = os.getenv("FRONTEND_URL", "*")
+allow_all = frontend_origin == "*"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin] if frontend_origin != "*" else ["*"],
-    allow_credentials=True,
+    allow_origins=[frontend_origin] if not allow_all else ["*"],
+    allow_credentials=not allow_all,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 # Security headers middleware (basic hardening)
@@ -125,6 +126,23 @@ class BulkIngest(BaseModel):
     cover_image: Optional[HttpUrl | str] = None
     description: Optional[str] = None
     bosses: List[BulkBoss] = []
+
+# Moderation queue schemas
+class QueueItem(BaseModel):
+    source: str = Field(..., description="Source identifier, e.g., 'youtube', 'wiki'")
+    game_title: str
+    boss_name: str
+    strategy_title: Optional[str] = None
+    steps: List[str] = []
+    recommended_level: Optional[str] = None
+    video_url: Optional[HttpUrl | str] = None
+    image: Optional[HttpUrl | str] = None
+    summary: Optional[str] = None
+    difficulty: Optional[str] = None
+    status: str = Field(default="pending", description="pending|approved|rejected")
+
+class QueueUpdate(BaseModel):
+    status: str = Field(..., pattern="^(pending|approved|rejected)$")
 
 # Routes
 @app.get("/")
@@ -245,6 +263,11 @@ def create_strategy(strategy: StrategyCreate):
         raise HTTPException(status_code=400, detail="Invalid boss_id")
     if db["boss"].count_documents({"_id": bid}, limit=1) == 0:
         raise HTTPException(status_code=404, detail="Boss not found")
+    # dedupe by video_url if provided
+    if strategy.video_url:
+        existing = db["strategy"].find_one({"boss_id": strategy.boss_id, "video_url": str(strategy.video_url)})
+        if existing:
+            return serialize_doc(existing)
     doc_id = create_document("strategy", strategy.model_dump())
     created = db["strategy"].find_one({"_id": ObjectId(doc_id)})
     return serialize_doc(created)
@@ -327,7 +350,9 @@ def ingest_demo():
             ]
             video = "https://www.youtube.com/embed/Hgfbm9lY0AU"
         sdoc = StrategyCreate(boss_id=str(ObjectId(bid)), title=f"How to beat {bdoc.name}", steps=steps, recommended_level="80+", video_url=video)
-        create_document("strategy", sdoc.model_dump())
+        # dedupe strategy per video
+        if db["strategy"].count_documents({"boss_id": sdoc.boss_id, "video_url": sdoc.video_url}, limit=1) == 0:
+            create_document("strategy", sdoc.model_dump())
 
     created_game = db["game"].find_one({"_id": ObjectId(game_id)})
     return serialize_doc(created_game)
@@ -359,7 +384,7 @@ def ingest_youtube(data: YouTubeIngest):
         boss_id = create_document("boss", new_boss.model_dump())
         boss = db["boss"].find_one({"_id": ObjectId(boss_id)})
 
-    # create strategy
+    # create strategy with dedupe on video_url
     strategy = StrategyCreate(
         boss_id=str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id"),
         title=data.strategy_title or f"Video Guide: {data.boss_name}",
@@ -367,6 +392,9 @@ def ingest_youtube(data: YouTubeIngest):
         recommended_level=data.recommended_level,
         video_url=str(data.video_url),
     )
+    existing = db["strategy"].find_one({"boss_id": strategy.boss_id, "video_url": strategy.video_url})
+    if existing:
+        return serialize_doc(existing)
     sid = create_document("strategy", strategy.model_dump())
     created = db["strategy"].find_one({"_id": ObjectId(sid)})
     return serialize_doc(created)
@@ -402,17 +430,22 @@ def ingest_bulk(payload: BulkIngest):
             )
             bid = create_document("boss", boss_create.model_dump())
             boss = db["boss"].find_one({"_id": ObjectId(bid)})
-        # strategies
+        # strategies with dedupe by video_url
         for s in b.strategies:
             try:
                 # validate boss id
                 _ = ObjectId(s.boss_id)
+                if s.video_url and db["strategy"].count_documents({"boss_id": s.boss_id, "video_url": s.video_url}, limit=1) > 0:
+                    continue
                 sid = create_document("strategy", s.model_dump())
                 _ = db["strategy"].find_one({"_id": ObjectId(sid)})
             except Exception:
                 # if provided boss_id is invalid or missing, force link to created boss
+                link_boss_id = str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id")
+                if s.video_url and db["strategy"].count_documents({"boss_id": link_boss_id, "video_url": s.video_url}, limit=1) > 0:
+                    continue
                 strategy = StrategyCreate(
-                    boss_id=str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id"),
+                    boss_id=link_boss_id,
                     title=s.title,
                     steps=s.steps,
                     recommended_level=s.recommended_level,
@@ -423,6 +456,105 @@ def ingest_bulk(payload: BulkIngest):
         created_bosses.append(serialize_doc(boss))
 
     return {"game": serialize_doc(game), "bosses": created_bosses}
+
+# Moderation & dedupe pipeline
+@app.post("/api/mod/submit", summary="Submit external item to moderation queue")
+def mod_submit(item: QueueItem):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    # dedupe in queue by source+video or source+boss_name
+    q = {"source": item.source, "game_title": item.game_title, "boss_name": item.boss_name}
+    if item.video_url:
+        q["video_url"] = str(item.video_url)
+    existing = db["ingest_queue"].find_one(q)
+    if existing:
+        return serialize_doc(existing)
+    _id = create_document("ingest_queue", item.model_dump())
+    created = db["ingest_queue"].find_one({"_id": ObjectId(_id)})
+    return serialize_doc(created)
+
+@app.get("/api/mod/queue", summary="List moderation queue items")
+def mod_queue(status: str = Query("pending")):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    items = get_documents("ingest_queue", {"status": status})
+    return [serialize_doc(x) for x in items]
+
+@app.post("/api/mod/approve/{item_id}", summary="Approve queue item and ingest")
+def mod_approve(item_id: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    item = db["ingest_queue"].find_one({"_id": oid})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # ensure game
+    game = db["game"].find_one({"title": item.get("game_title")})
+    if not game:
+        game_id = create_document("game", GameCreate(title=item.get("game_title")).model_dump())
+        game = db["game"].find_one({"_id": ObjectId(game_id)})
+    game_id_str = str(game["_id"]) if isinstance(game["_id"], ObjectId) else game.get("id")
+
+    # ensure boss
+    boss = db["boss"].find_one({"name": item.get("boss_name"), "game_id": game_id_str})
+    if not boss:
+        bid = create_document("boss", BossCreate(game_id=game_id_str, name=item.get("boss_name"), image=item.get("image"), summary=item.get("summary"), difficulty=item.get("difficulty")).model_dump())
+        boss = db["boss"].find_one({"_id": ObjectId(bid)})
+
+    # create strategy if supplied (dedupe by video_url)
+    vid = item.get("video_url")
+    if vid:
+        link_boss_id = str(boss["_id"]) if isinstance(boss["_id"], ObjectId) else boss.get("id")
+        exists = db["strategy"].find_one({"boss_id": link_boss_id, "video_url": vid})
+        if not exists:
+            sid = create_document("strategy", StrategyCreate(boss_id=link_boss_id, title=item.get("strategy_title") or f"Guide: {item.get('boss_name')}", steps=item.get("steps") or [], recommended_level=item.get("recommended_level"), video_url=vid).model_dump())
+            _ = db["strategy"].find_one({"_id": ObjectId(sid)})
+
+    # mark approved
+    db["ingest_queue"].update_one({"_id": oid}, {"$set": {"status": "approved"}})
+    item = db["ingest_queue"].find_one({"_id": oid})
+    return serialize_doc(item)
+
+@app.post("/api/mod/reject/{item_id}", summary="Reject queue item")
+def mod_reject(item_id: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    r = db["ingest_queue"].update_one({"_id": oid}, {"$set": {"status": "rejected"}})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    item = db["ingest_queue"].find_one({"_id": oid})
+    return serialize_doc(item)
+
+# A manual trigger for scheduled ingestion of curated sources (safe, no external calls here)
+@app.post("/api/ingest/scheduled-run", summary="Simulate scheduled crawl and add items to moderation queue")
+def scheduled_ingest():
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    samples = [
+        QueueItem(source="youtube", game_title="Elden Ring", boss_name="Radahn, Starscourge", strategy_title="Bleed Build", steps=["Use Rivers of Blood", "Stay on horseback"], video_url="https://www.youtube.com/embed/sample123", image=None, summary="Festival of Radahn fight", difficulty="Hard").model_dump(),
+        QueueItem(source="wiki", game_title="Sekiro", boss_name="Genichiro Ashina", strategy_title="Mikiri + Deflect", steps=["Bait thrust for Mikiri", "Deflect bow combos"], video_url=None, image=None, summary="Castle rooftop duel", difficulty="Hard").model_dump(),
+    ]
+    inserted = []
+    for s in samples:
+        q = {"source": s["source"], "game_title": s["game_title"], "boss_name": s["boss_name"]}
+        if s.get("video_url"):
+            q["video_url"] = s["video_url"]
+        existing = db["ingest_queue"].find_one(q)
+        if existing:
+            inserted.append(serialize_doc(existing))
+            continue
+        _id = create_document("ingest_queue", s)
+        created = db["ingest_queue"].find_one({"_id": ObjectId(_id)})
+        inserted.append(serialize_doc(created))
+    return {"queued": inserted}
 
 
 if __name__ == "__main__":
